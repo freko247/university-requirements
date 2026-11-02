@@ -66,7 +66,7 @@ Each program has these fields:
 
 `vacant: true` means the KOT text ended in ", ledige pladser" (seats left). It is shown under the label.
 
-On load, `index.html` computes `p.median`. This is the median of the years with a numeric cut-off. A program with no cut-off in any year shows its status from the most recent year it was listed. Use `entryFor(p, yearVal)` for the selected year or the median, `classify(entry, userGpa)` for eligibility, and `gpaSortKey(entry)` for sorting. When sorting by GPA, entries without a GPA bar always go last, in either direction.
+On load, `index.html` computes `p.median`. This is the median of the years with a numeric cut-off. A program with no cut-off in any year shows its status from the most recent year it was listed. If a program is missing from the latest year's figures, `p.median.discontinuedAfter` is set. `classify()` then treats it as `unavailable` and the badge reads "Discontinued". Use `entryFor(p, yearVal)` for the selected year or the median, `classify(entry, userGpa)` for eligibility, and `gpaSortKey(entry)` for sorting. When sorting by GPA, entries without a GPA bar always go last, in either direction.
 
 ## How the inline JS fits together
 
@@ -75,5 +75,6 @@ On load, `index.html` computes `p.median`. This is the median of the years with 
 - Sorting: header cells carry `data-sort="<column>"`. Clicking a new column sorts it ascending; clicking the active column flips the direction; and the column header shows ↑/↓. Text and IDs compare with the shared `collator` (`Intl.Collator('da', {numeric: true})`), and ties break on KOT ID. Danish collation puts æ/ø/å after z and treats a leading "Aa" as "Å", so Aalborg and Aarhus sort last.
 - On load, `fillDatasetInfo()` fills `[data-fill="count"]`/`[data-fill="years"]` elements and the page title. `populateFilters()` builds the institution, location and year dropdowns from the data. Matching is exact (`p.institution === value`, `p.location === value`).
 - Map: `buildMapMarkers()` creates one `L.circleMarker` per `location` that has coordinates. "E-læring" (online) has none and can only be chosen in the dropdown. `updateMap()` resizes markers by the number of programs matching search and institution, hides empty ones, and highlights the selected location in red. The location filter is deliberately not applied to the markers, so another location can still be clicked. Popups are DOM elements built in `markerPopup()`. Their button calls `selectLocation()`. The home view (`showHome()`) fits the Danish markers and leaves out Greenland (Sisimiut).
-- Row links are hardcoded to the generic UG.dk and KOT pages, because the spreadsheets have no per-program links.
+- There are no per-program links, because the spreadsheets have none. The general links (fudm.dk, ug.dk, optagelse.dk) are in the `<footer>`.
 - Rows are rendered with `innerHTML` string templates. Data values go through `esc()`.
+- Narrow screens (below Tailwind `md`): the KOT ID, Institution and Status columns are `hidden md:table-cell`. Institution and ID are repeated under the program name, and the status badge (`badgeHtml`) under the GPA, each in a `md:hidden` element. Keep both copies in sync when changing a row.

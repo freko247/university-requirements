@@ -63,7 +63,7 @@
         </div>
 
         <!-- Filter Controls -->
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-6">
+        <div class="bg-white p-4 md:p-6 rounded-xl shadow-sm border border-gray-200 space-y-6">
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                 <div>
                     <label for="searchInput" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Search Programs or ID</label>
@@ -121,12 +121,11 @@
                 <table class="w-full text-left border-collapse" id="programsTable">
                     <thead>
                         <tr class="bg-gray-100 text-gray-700 text-xs uppercase tracking-wider border-b border-gray-200">
-                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="optOmrNr">KOT ID <span class="sort-ind">↕︎</span></th>
-                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="programDetails">Program Details <span class="sort-ind">↕︎</span></th>
-                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="institution">Institution <span class="sort-ind">↕︎</span></th>
-                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="gpa">Required GPA <span class="sort-ind">↕︎</span></th>
-                            <th class="py-3 px-4">Status</th>
-                            <th class="py-3 px-4">Official Links</th>
+                            <th class="hidden md:table-cell py-3 px-2 md:px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="optOmrNr">KOT ID <span class="sort-ind">↕︎</span></th>
+                            <th class="py-3 px-2 md:px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="programDetails">Program Details <span class="sort-ind">↕︎</span></th>
+                            <th class="hidden md:table-cell py-3 px-2 md:px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="institution">Institution <span class="sort-ind">↕︎</span></th>
+                            <th class="py-3 px-2 md:px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="gpa">Required GPA <span class="sort-ind">↕︎</span></th>
+                            <th class="hidden md:table-cell py-3 px-2 md:px-4">Status</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200 text-sm text-gray-700 bg-white" id="tableBody"></tbody>
@@ -145,6 +144,11 @@
             </div>
         </div>
     </main>
+
+    <footer class="max-w-7xl mx-auto px-4 pb-10 text-xs text-gray-500 space-y-1">
+        <p>Cut-offs: KOT admission figures (hovedtal) <span data-fill="years">…</span>, published by the Danish ministry for higher education (<a href="https://fudm.dk/" target="_blank" rel="noopener" class="text-blue-600 hover:underline">fudm.dk ↗</a>). Figures are kvote 1 cut-offs; always check the institution's own admission requirements.</p>
+        <p>Program descriptions and admission requirements: <a href="https://www.ug.dk/" target="_blank" rel="noopener" class="text-blue-600 hover:underline">UddannelsesGuiden (ug.dk) ↗</a> · Apply via <a href="https://www.optagelse.dk/" target="_blank" rel="noopener" class="text-blue-600 hover:underline">optagelse.dk ↗</a></p>
+    </footer>
 
     <!-- Dataset: data.js sets window.KOT_DATA. Loaded as a script (not fetched) so the page also works when opened from disk (file://). -->
     <script src="data.js"></script>
@@ -188,7 +192,7 @@
             tbody.innerHTML = '';
             const tr = document.createElement('tr');
             const td = document.createElement('td');
-            td.colSpan = 6;
+            td.colSpan = 5;
             td.className = 'py-6 px-4 text-center text-red-700';
             td.innerText = message;
             tr.appendChild(td);
@@ -215,17 +219,20 @@
 
             // "Median" view: the median of the years that had a numeric cut-off. A program that
             // never had one shows its status from the most recent year it was listed.
+            const latestYear = data.years[data.years.length - 1];
             kotData.forEach(p => {
                 const years = Object.keys(p.years).sort();
+                const lastListed = [...years].reverse().find(y => p.years[y].status !== 'not_listed');
                 const cutoffs = years.map(y => p.years[y]).filter(e => e.status === 'cutoff').map(e => e.cutoff).sort((a, b) => a - b);
                 if (cutoffs.length > 0) {
                     const mid = Math.floor(cutoffs.length / 2);
                     const median = cutoffs.length % 2 ? cutoffs[mid] : (cutoffs[mid - 1] + cutoffs[mid]) / 2;
                     p.median = { status: 'cutoff', cutoff: median, cutoffYears: cutoffs.length };
                 } else {
-                    const lastListed = [...years].reverse().find(y => p.years[y].status !== 'not_listed');
                     p.median = { ...p.years[lastListed], fromYear: lastListed };
                 }
+                // Not in the latest year's figures: the median is historical, so mark it unavailable.
+                if (lastListed < latestYear) p.median.discontinuedAfter = lastListed;
             });
 
             fillDatasetInfo(data);
@@ -289,6 +296,7 @@
 
         // 'eligible' | 'below' | 'other' | 'unavailable'. Without a GPA, cut-off programs count as eligible.
         function classify(entry, userGpa) {
+            if (entry.discontinuedAfter) return 'unavailable';
             const kind = STATUS[entry.status].kind;
             if (kind === 'cutoff') return isNaN(userGpa) || userGpa >= entry.cutoff ? 'eligible' : 'below';
             return kind;
@@ -438,22 +446,23 @@
                 const gpaNote = entry.vacant ? `<div class="text-xs font-normal text-gray-500">ledige pladser</div>` : '';
                 const gpaColor = dimmed ? 'text-gray-500' : cls === 'other' ? 'text-amber-800' : 'text-blue-900';
 
-                const badge = cls === 'below' ? { text: 'Below cut-off', cls: BADGE_OFF, help: 'Your GPA is below the kvote 1 cut-off' }
+                const badge = entry.discontinuedAfter ? { text: 'Discontinued', cls: BADGE_OFF, help: `Not in the KOT figures after ${entry.discontinuedAfter}; the value shown is historical` }
+                    : cls === 'below' ? { text: 'Below cut-off', cls: BADGE_OFF, help: 'Your GPA is below the kvote 1 cut-off' }
                     : entry.status === 'cutoff' ? { text: 'Available', cls: BADGE_OK, help: 'Your GPA meets the kvote 1 cut-off' }
                     : { text: st.badge, cls: st.cls, help: st.help };
+
+                const badgeHtml = `<span class="${badge.cls} px-2 py-0.5 rounded whitespace-nowrap" title="${esc(badge.help)}">${badge.text}</span>`;
 
                 const tr = document.createElement('tr');
                 tr.className = `border-b border-gray-100 transition-colors ${dimmed ? 'disabled-row' : 'hover:bg-blue-50/50'}`;
                 tr.innerHTML = `
-                    <td class="py-3 px-4 font-mono text-xs text-gray-500">${esc(p.optOmrNr)}</td>
-                    <td class="py-3 px-4 font-medium text-gray-900">${esc(p.programDetails)}</td>
-                    <td class="py-3 px-4 text-gray-600">${esc(p.institution)}</td>
-                    <td class="py-3 px-4 font-bold ${gpaColor}" title="${esc(gpaTitle)}">${esc(gpaText)}${gpaNote}</td>
-                    <td class="py-3 px-4 text-xs font-semibold"><span class="${badge.cls} px-2 py-0.5 rounded" title="${esc(badge.help)}">${badge.text}</span></td>
-                    <td class="py-3 px-4 text-xs space-x-2">
-                        <a href="https://www.ug.dk" target="_blank" rel="noopener" class="text-blue-600 hover:underline">UG.dk ↗</a>
-                        <a href="https://ufm.dk/uddannelse/statistik-og-analyser/sogning-og-optag-pa-videregaende-uddannelser/kot-hovedtal" target="_blank" rel="noopener" class="text-gray-500 hover:text-blue-600 hover:underline">KOT ↗</a>
-                    </td>
+                    <td class="hidden md:table-cell py-3 px-2 md:px-4 font-mono text-xs text-gray-500">${esc(p.optOmrNr)}</td>
+                    <td class="py-3 px-2 md:px-4 font-medium text-gray-900">${esc(p.programDetails)}
+                        <div class="md:hidden mt-0.5 text-xs font-normal text-gray-500">${esc(p.institution)} · ${esc(p.optOmrNr)}</div></td>
+                    <td class="hidden md:table-cell py-3 px-2 md:px-4 text-gray-600">${esc(p.institution)}</td>
+                    <td class="py-3 px-2 md:px-4 font-bold ${gpaColor}" title="${esc(gpaTitle)}">${esc(gpaText)}${gpaNote}
+                        <div class="md:hidden mt-1 text-xs font-semibold">${badgeHtml}</div></td>
+                    <td class="hidden md:table-cell py-3 px-2 md:px-4 text-xs font-semibold">${badgeHtml}</td>
                 `;
                 tbody.appendChild(tr);
             });
@@ -468,7 +477,7 @@
                 eligibleEl.classList.remove('hidden');
                 const notes = [];
                 if (counts.other) notes.push(`${counts.other} not decided by GPA (quota 2 / outside quotas)`);
-                if (counts.unavailable) notes.push(`${counts.unavailable} not offered`);
+                if (counts.unavailable) notes.push(`${counts.unavailable} ${yearVal === 'median' ? 'not offered or discontinued' : 'not offered'}`);
                 eligibleEl.innerText = `Eligible for ${counts.eligible} of ${filteredData.length} programs`
                     + (notes.length ? ` · ${notes.join(' · ')}` : '');
             } else {
