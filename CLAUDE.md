@@ -19,16 +19,17 @@ There is no package manager, build step, linter or test suite.
 python3 -m http.server 8000   # then open http://localhost:8000/
 ```
 
-## Known gotcha: the page doesn't load data.json
-
-`loadData()` in `index.html` fetches `denmark_university_admissions_top100.json`, not `data.json`. When that fetch fails (missing file, or opened via `file://`), the page silently fills `kotData` with **1,059 synthetic placeholder programs** ("Uddannelse #i") made up in the fallback loop. If the table shows placeholder names, the real data isn't loaded. Fix the fetch path rather than editing the fallback.
+`loadData()` fetches `data.json`. If that fails, the page shows an error in the table (with a hint when opened via `file://`) instead of falling back to any built-in data.
 
 ## Data model (`programs[]` entries)
 
 `optOmrNr` (KOT ID, string), `institution`, `programDetails` (one string: `"<name>, <location>, Studiestart: <start>"`), `city`, `lat`/`lng`, `ugLink`, `kotLink`, `gpaHistory` (`{"2022".."2026": number}`), `medianGpa`.
 
-- A GPA of `0` means "Alle optaget" (everyone qualified admitted, no cut-off). About 3,500 year entries are `0`. Eligibility logic treats `0` as always eligible, and the median ignores zeros.
-- `medianGpa` is stored in the JSON but **recomputed** on load from the non-zero `gpaHistory` values, so the stored value is ignored.
+- Special values (constants `ALL_ADMITTED` / `ADMISSION_TEST` in `index.html`):
+  - `0` = "Alle optaget" (everyone qualified admitted, no cut-off). Always counted as eligible. About 3,500 year entries.
+  - `-1` = admission by entrance test or other criteria (e.g. Journalistik, Arkitekt). Shown as "Admission test" / "Test required", never greyed out and not counted as eligible. 102 year entries across 28 programs.
+- `medianGpa` is stored in the JSON but **recomputed** on load from the positive `gpaHistory` values. A program with no positive value gets `-1` if any year is `-1`, otherwise `0`.
+- Use `requiredGpa(p, yearVal)` to get the cut-off for the selected year or the median.
 
 ## How the inline JS fits together
 

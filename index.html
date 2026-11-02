@@ -156,63 +156,66 @@
     <script>
         let kotData = [];
 
-        // Fetch or load the full dataset directly from the generated file or embedded script
+        // Special cut-off values in gpaHistory:
+        //   0  = "Alle optaget" (all qualified applicants admitted, no GPA cut-off)
+        //  -1  = admission by entrance test / other criteria, GPA alone doesn't decide
+        const ALL_ADMITTED = 0;
+        const ADMISSION_TEST = -1;
+
+        function showLoadError(message) {
+            document.getElementById('rowCount').innerText = 'Could not load program data';
+            document.getElementById('rowCount').className = 'text-red-600 font-semibold';
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = 6;
+            td.className = 'py-6 px-4 text-center text-red-700';
+            td.innerText = message;
+            tr.appendChild(td);
+            tbody.appendChild(tr);
+            document.getElementById('prevBtn').disabled = true;
+            document.getElementById('nextBtn').disabled = true;
+        }
+
         async function loadData() {
             try {
-                // If hosted alongside the generated JSON file
-                const response = await fetch('denmark_university_admissions_top100.json');
-                if (response.ok) {
-                    const data = await response.json();
-                    kotData = data.programs;
+                const response = await fetch('data.json');
+                if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
+                const data = await response.json();
+                if (!Array.isArray(data.programs) || data.programs.length === 0) {
+                    throw new Error('data.json contains no programs');
                 }
+                kotData = data.programs;
             } catch (e) {
-                console.log("Fallback to embedded data generation");
+                console.error('Failed to load data.json', e);
+                const hint = location.protocol === 'file:'
+                    ? ' Browsers block loading data from local files: serve this folder over HTTP (e.g. "python3 -m http.server 8000") and open http://localhost:8000/.'
+                    : '';
+                showLoadError(`Failed to load data.json (${e.message}).${hint}`);
+                return;
             }
 
-            // Fallback: If fetch fails or runs locally without server, generate full 1059 dataset matching attached Excel sheets precisely
-            if (kotData.length === 0) {
-                const sampleInsts = [
-                    ["Københavns Universitet", "Copenhagen"],
-                    ["Aarhus Universitet", "Aarhus"],
-                    ["Syddansk Universitet", "Odense"],
-                    ["Aalborg Universitet", "Aalborg"],
-                    ["Danmarks Tekniske Universitet", "Kongens Lyngby"],
-                    ["Copenhagen Business School", "Frederiksberg"],
-                    ["IT-Universitetet i København", "Copenhagen"],
-                    ["Københavns Professionshøjskole", "Copenhagen"]
-                ];
-
-                for(let i = 1; i <= 1059; i++) {
-                    const inst = sampleInsts[i % sampleInsts.length];
-                    const base = parseFloat((5.5 + (1059 - i) * 0.005).toFixed(1));
-                    kotData.push({
-                        optOmrNr: String(10000 + i),
-                        institution: inst[0],
-                        city: inst[1],
-                        programDetails: `Uddannelse #${i}, ${inst[1]}, Studiestart: sommerstart`,
-                        gpaHistory: {
-                            "2026": base,
-                            "2025": parseFloat((base + 0.1).toFixed(1)),
-                            "2024": parseFloat((base + 0.2).toFixed(1)),
-                            "2023": parseFloat((base - 0.1).toFixed(1)),
-                            "2022": base < 6.0 ? 0.0 : parseFloat((base - 0.2).toFixed(1))
-                        }
-                    });
-                }
-            }
-
-            // Compute Median
+            // Compute median over years with a real GPA cut-off. If a program never had one,
+            // fall back to "admission test" if any year was by test, else "Alle optaget".
             kotData.forEach(p => {
-                const vals = Object.values(p.gpaHistory).filter(v => v > 0).sort((a,b) => a - b);
-                if(vals.length > 0) {
+                const all = Object.values(p.gpaHistory);
+                const vals = all.filter(v => v > 0).sort((a,b) => a - b);
+                if (vals.length > 0) {
                     const mid = Math.floor(vals.length / 2);
                     p.medianGpa = vals.length % 2 !== 0 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2;
+                } else if (all.includes(ADMISSION_TEST)) {
+                    p.medianGpa = ADMISSION_TEST;
                 } else {
-                    p.medianGpa = 0.0;
+                    p.medianGpa = ALL_ADMITTED;
                 }
             });
 
             applyFilters();
+        }
+
+        function requiredGpa(p, yearVal) {
+            return yearVal === "median" ? p.medianGpa : p.gpaHistory[yearVal];
         }
 
         // App state
@@ -277,16 +280,28 @@
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = "";
 
+            // Programs admitting by entrance test can't be judged on GPA, so they are
+            // neither counted as eligible nor greyed out.
             let eligibleCount = 0;
+            let testCount = 0;
             filteredData.forEach(p => {
-                const reqGpa = yearVal === "median" ? p.medianGpa : p.gpaHistory[yearVal];
-                if (isNaN(userGpa) || reqGpa === 0 || reqGpa <= userGpa) eligibleCount++;
+                const reqGpa = requiredGpa(p, yearVal);
+                if (reqGpa === ADMISSION_TEST) testCount++;
+                else if (reqGpa === ALL_ADMITTED || reqGpa <= userGpa) eligibleCount++;
             });
 
             pageItems.forEach(p => {
-                const reqGpa = yearVal === "median" ? p.medianGpa : p.gpaHistory[yearVal];
-                const gpaDisplay = reqGpa === 0 ? "Alle optaget" : reqGpa.toFixed(1);
+                const reqGpa = requiredGpa(p, yearVal);
+                const isTest = reqGpa === ADMISSION_TEST;
+                const gpaDisplay = isTest ? "Admission test"
+                    : reqGpa === ALL_ADMITTED ? "Alle optaget"
+                    : reqGpa.toFixed(1);
                 const isDisabled = !isNaN(userGpa) && reqGpa > 0 && reqGpa > userGpa;
+                const statusBadge = isTest
+                    ? `<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded">Test required</span>`
+                    : isDisabled
+                    ? `<span class="bg-gray-200 text-gray-700 px-2 py-0.5 rounded">Below cut-off</span>`
+                    : `<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">Available</span>`;
 
                 const tr = document.createElement('tr');
                 tr.className = `border-b border-gray-100 transition-colors ${isDisabled ? 'disabled-row' : 'hover:bg-blue-50/50'}`;
@@ -294,10 +309,8 @@
                     <td class="py-3 px-4 font-mono text-xs text-gray-500">${p.optOmrNr}</td>
                     <td class="py-3 px-4 font-medium text-gray-900">${p.programDetails}</td>
                     <td class="py-3 px-4 text-gray-600">${p.institution}</td>
-                    <td class="py-3 px-4 font-bold ${isDisabled ? 'text-gray-500' : 'text-blue-900'}">${gpaDisplay}</td>
-                    <td class="py-3 px-4 text-xs font-semibold">
-                        ${isDisabled ? `<span class="bg-gray-200 text-gray-700 px-2 py-0.5 rounded">GPA Too High</span>` : `<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">Available</span>`}
-                    </td>
+                    <td class="py-3 px-4 font-bold ${isDisabled ? 'text-gray-500' : isTest ? 'text-amber-800' : 'text-blue-900'}">${gpaDisplay}</td>
+                    <td class="py-3 px-4 text-xs font-semibold">${statusBadge}</td>
                     <td class="py-3 px-4 text-xs space-x-2">
                         <a href="https://www.ug.dk" target="_blank" rel="noopener" class="text-blue-600 hover:underline">UG.dk ↗</a>
                         <a href="https://ufm.dk/uddannelse/statistik-og-analyser/sogning-og-optag-pa-videregaende-uddannelser/kot-hovedtal" target="_blank" rel="noopener" class="text-gray-500 hover:text-blue-600 hover:underline">KOT ↗</a>
@@ -314,7 +327,8 @@
             const eligibleEl = document.getElementById('eligibleCount');
             if (!isNaN(userGpa)) {
                 eligibleEl.classList.remove('hidden');
-                eligibleEl.innerText = `Eligible for ${eligibleCount} of ${filteredData.length} programs`;
+                eligibleEl.innerText = `Eligible for ${eligibleCount} of ${filteredData.length} programs`
+                    + (testCount > 0 ? ` (${testCount} admit by entrance test)` : '');
             } else {
                 eligibleEl.classList.add('hidden');
             }
@@ -351,8 +365,8 @@
                 else if (col === 'programDetails') { vA = a.programDetails; vB = b.programDetails; }
                 else if (col === 'institution') { vA = a.institution; vB = b.institution; }
                 else if (col === 'gpa') {
-                    vA = yearVal === "median" ? a.medianGpa : a.gpaHistory[yearVal];
-                    vB = yearVal === "median" ? b.medianGpa : b.gpaHistory[yearVal];
+                    vA = requiredGpa(a, yearVal);
+                    vB = requiredGpa(b, yearVal);
                 }
 
                 if (vA < vB) return sortDir ? -1 : 1;
