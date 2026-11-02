@@ -8,11 +8,20 @@ A single-page, no-build static web app: a Danish higher-education admission expl
 
 - `index.html`: the whole app (markup, inline JS, a little inline CSS). Leaflet 1.9.4 still loads from the unpkg CDN, and map tiles come from Esri, so the map needs internet access.
 - `data.js`: the dataset (~490 KB, 1,059 programs), **generated** by `scripts/build_data.py`; don't edit it by hand. It assigns a JSON object to `window.KOT_DATA`. It is a script rather than `data.json` so the page works when opened directly from disk: browsers block `fetch()` on `file://`, but allow `<script src>`.
-- `scripts/build_data.py`: builds `data.js` from the official KOT "hovedtal" spreadsheets.
+- `scripts/build_data.py`: builds `data.js` from the official KOT "hovedtal" spreadsheets. Names go through `clean_text()`, which collapses whitespace and removes spaces before commas.
+- `scripts/smoke_test.mjs`: the headless-Chrome check described under Testing.
 - `*.xlsx`: the KOT source spreadsheets, one per year. They are gitignored and kept only locally, so `data.js` can only be rebuilt on a machine that has them.
 - `tailwind.css`: prebuilt, minified Tailwind **v3** stylesheet, committed. It contains only the classes used in `index.html`.
 
-There is no package manager, linter or test suite.
+There is no package manager or linter.
+
+## Testing
+
+```sh
+node scripts/smoke_test.mjs   # needs Node 22+ and Chrome (set CHROME=... if not in the default location)
+```
+
+The test opens `index.html` from disk in headless Chrome. It checks the page against `data.js`: every program loaded; the year, institution and location dropdowns; one map marker per mapped location; per-year eligibility counts at GPA 7, recomputed independently in the test; row expansion; filters and reset; the phone-width layout; and a clean console. Run it after rebuilding the data or changing `index.html`. The test keeps its own copy of the status→kind mapping, so update it when adding a status.
 
 ## Rebuilding the data
 
@@ -77,4 +86,5 @@ On load, `index.html` computes `p.median`. This is the median of the years with 
 - Map: `buildMapMarkers()` creates one `L.circleMarker` per `location` that has coordinates. "E-læring" (online) has none and can only be chosen in the dropdown. `updateMap()` resizes markers by the number of programs matching search and institution, hides empty ones, and highlights the selected location in red. The location filter is deliberately not applied to the markers, so another location can still be clicked. Popups are DOM elements built in `markerPopup()`. Their button calls `selectLocation()`. The home view (`showHome()`) fits the Danish markers and leaves out Greenland (Sisimiut).
 - There are no per-program links, because the spreadsheets have none. The general links (fudm.dk, ug.dk, optagelse.dk) are in the `<footer>`.
 - Rows are rendered with `innerHTML` string templates. Data values go through `esc()`.
-- Narrow screens (below Tailwind `md`): the KOT ID, Institution and Status columns are `hidden md:table-cell`. Institution and ID are repeated under the program name, and the status badge (`badgeHtml`) under the GPA, each in a `md:hidden` element. Keep both copies in sync when changing a row.
+- Trend: `sparkline(p, yearVal)` draws an inline SVG of the numeric cut-offs per year. Years without a cut-off leave a gap, and the selected year's point is red. Clicking a row toggles its `optOmrNr` in the `expanded` set, and `detailRow()` then renders one box per year below it.
+- Narrow screens (below Tailwind `md`): the KOT ID, Institution, Trend and Status columns are `hidden md:table-cell`. Institution and ID are repeated under the program name, and the status badge (`badgeHtml`) under the GPA, each in a `md:hidden` element. Keep both copies in sync when changing a row.

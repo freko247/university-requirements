@@ -119,6 +119,12 @@ LOCATIONS: dict[str, tuple[float, float] | None] = {
 }
 
 
+def clean_text(value) -> str:
+    """Collapse runs of whitespace and drop spaces before commas ("ledelse , Horsens" -> "ledelse, Horsens")."""
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    return re.sub(r"\s+,", ",", text)
+
+
 def parse_k1(value, where: str) -> dict:
     """Turn a raw 'kvote 1 kvotient' cell into {status, cutoff?, vacant?}."""
     if isinstance(value, (int, float)):
@@ -158,8 +164,8 @@ def read_year(path: Path) -> dict[str, dict]:
             continue  # institution header or blank row
         oid = str(int(raw_id))
         rows[oid] = {
-            "institution": str(row[COL_INST] or "").strip(),
-            "name": str(row[COL_NAME] or "").strip(),
+            "institution": clean_text(row[COL_INST]),
+            "name": clean_text(row[COL_NAME]),
             "k1": parse_k1(row[COL_K1], f"{path.name} row {rownum} ({oid})"),
         }
     return rows
