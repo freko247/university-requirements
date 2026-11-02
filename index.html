@@ -148,11 +148,35 @@
     <script>
         let kotData = [];
 
-        // Special cut-off values in gpaHistory:
-        //   0  = "Alle optaget" (all qualified applicants admitted, no GPA cut-off)
-        //  -1  = admission by entrance test / other criteria, GPA alone doesn't decide
-        const ALL_ADMITTED = 0;
-        const ADMISSION_TEST = -1;
+        // Per-year status codes written by scripts/build_data.py. `label` is the KOT wording shown
+        // in the GPA column; `kind` decides eligibility:
+        //   cutoff      -> compare the user's GPA with the kvote 1 cut-off
+        //   eligible    -> every qualified applicant was admitted
+        //   other       -> GPA doesn't decide admission (quota 2 / outside the quota system)
+        //   unavailable -> not offered or not listed that year (row is greyed out)
+        // Class strings must stay literal so the Tailwind build picks them up.
+        const BADGE_OK = 'bg-emerald-100 text-emerald-800';
+        const BADGE_WARN = 'bg-amber-100 text-amber-800';
+        const BADGE_OFF = 'bg-gray-200 text-gray-700';
+        const STATUS = {
+            cutoff:        { kind: 'cutoff' },
+            all_admitted:  { kind: 'eligible',    label: 'Alle optaget',         badge: 'Available',        cls: BADGE_OK,
+                             help: 'All qualified applicants were admitted (no GPA cut-off)' },
+            quota2_only:   { kind: 'other',       label: 'Kun kvote 2',          badge: 'Quota 2 only',     cls: BADGE_WARN,
+                             help: 'No GPA quota: admission only through quota 2 (application, test or other criteria)' },
+            outside_quota: { kind: 'other',       label: 'Uden for kvotesystem', badge: 'Outside quotas',   cls: BADGE_WARN,
+                             help: 'Admitted outside the KOT quota system; check the institution\'s own admission rules' },
+            not_offered:   { kind: 'unavailable', label: 'Ikke oprettet',        badge: 'Not offered',      cls: BADGE_OFF,
+                             help: 'The program was not offered this year' },
+            none_admitted: { kind: 'unavailable', label: 'Ingen optaget',        badge: 'None admitted',    cls: BADGE_OFF,
+                             help: 'Nobody was admitted this year' },
+            not_listed:    { kind: 'unavailable', label: '—',                    badge: 'Not listed',       cls: BADGE_OFF,
+                             help: 'The program is not in this year\'s KOT figures (not yet offered, or discontinued)' },
+        };
+        // GPA-column sort order for entries without a cut-off. Statuses not listed here sort after all cut-offs.
+        const NON_CUTOFF_SORT = ['quota2_only', 'outside_quota', 'not_offered', 'none_admitted', 'not_listed'];
+
+        const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
         function showLoadError(message) {
             document.getElementById('rowCount').innerText = 'Could not load program data';
@@ -179,18 +203,25 @@
             }
             kotData = data.programs;
 
-            // Compute median over years with a real GPA cut-off. If a program never had one,
-            // fall back to "admission test" if any year was by test, else "Alle optaget".
+            const unknown = new Set();
+            kotData.forEach(p => Object.values(p.years).forEach(e => { if (!STATUS[e.status]) unknown.add(e.status); }));
+            if (unknown.size) {
+                showLoadError(`data.js contains unknown status codes: ${[...unknown].join(', ')}. Update STATUS in index.html.`);
+                return;
+            }
+
+            // "Median" view: the median of the years that had a numeric cut-off. A program that
+            // never had one shows its status from the most recent year it was listed.
             kotData.forEach(p => {
-                const all = Object.values(p.gpaHistory);
-                const vals = all.filter(v => v > 0).sort((a,b) => a - b);
-                if (vals.length > 0) {
-                    const mid = Math.floor(vals.length / 2);
-                    p.medianGpa = vals.length % 2 !== 0 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2;
-                } else if (all.includes(ADMISSION_TEST)) {
-                    p.medianGpa = ADMISSION_TEST;
+                const years = Object.keys(p.years).sort();
+                const cutoffs = years.map(y => p.years[y]).filter(e => e.status === 'cutoff').map(e => e.cutoff).sort((a, b) => a - b);
+                if (cutoffs.length > 0) {
+                    const mid = Math.floor(cutoffs.length / 2);
+                    const median = cutoffs.length % 2 ? cutoffs[mid] : (cutoffs[mid - 1] + cutoffs[mid]) / 2;
+                    p.median = { status: 'cutoff', cutoff: median, cutoffYears: cutoffs.length };
                 } else {
-                    p.medianGpa = ALL_ADMITTED;
+                    const lastListed = [...years].reverse().find(y => p.years[y].status !== 'not_listed');
+                    p.median = { ...p.years[lastListed], fromYear: lastListed };
                 }
             });
 
@@ -213,8 +244,23 @@
             });
         }
 
-        function requiredGpa(p, yearVal) {
-            return yearVal === "median" ? p.medianGpa : p.gpaHistory[yearVal];
+        // The program's entry ({status, cutoff?, vacant?}) for the selected year, or its median summary.
+        function entryFor(p, yearVal) {
+            return yearVal === "median" ? p.median : p.years[yearVal];
+        }
+
+        // 'eligible' | 'below' | 'other' | 'unavailable'. Without a GPA, cut-off programs count as eligible.
+        function classify(entry, userGpa) {
+            const kind = STATUS[entry.status].kind;
+            if (kind === 'cutoff') return isNaN(userGpa) || userGpa >= entry.cutoff ? 'eligible' : 'below';
+            return kind;
+        }
+
+        // Numeric GPA sort key: the cut-off, 0 for "Alle optaget", null for everything else.
+        function gpaSortKey(entry) {
+            if (entry.status === 'cutoff') return entry.cutoff;
+            if (entry.status === 'all_admitted') return 0;
+            return null;
         }
 
         // App state
@@ -287,37 +333,38 @@
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = "";
 
-            // Programs admitting by entrance test can't be judged on GPA, so they are
-            // neither counted as eligible nor greyed out.
-            let eligibleCount = 0;
-            let testCount = 0;
-            filteredData.forEach(p => {
-                const reqGpa = requiredGpa(p, yearVal);
-                if (reqGpa === ADMISSION_TEST) testCount++;
-                else if (reqGpa === ALL_ADMITTED || reqGpa <= userGpa) eligibleCount++;
-            });
+            const counts = { eligible: 0, below: 0, other: 0, unavailable: 0 };
+            filteredData.forEach(p => counts[classify(entryFor(p, yearVal), userGpa)]++);
 
             pageItems.forEach(p => {
-                const reqGpa = requiredGpa(p, yearVal);
-                const isTest = reqGpa === ADMISSION_TEST;
-                const gpaDisplay = isTest ? "Admission test"
-                    : reqGpa === ALL_ADMITTED ? "Alle optaget"
-                    : reqGpa.toFixed(1);
-                const isDisabled = !isNaN(userGpa) && reqGpa > 0 && reqGpa > userGpa;
-                const statusBadge = isTest
-                    ? `<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded">Test required</span>`
-                    : isDisabled
-                    ? `<span class="bg-gray-200 text-gray-700 px-2 py-0.5 rounded">Below cut-off</span>`
-                    : `<span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded">Available</span>`;
+                const entry = entryFor(p, yearVal);
+                const st = STATUS[entry.status];
+                const cls = classify(entry, userGpa);
+                const dimmed = cls === 'below' || cls === 'unavailable';
+
+                let gpaText, gpaTitle = '';
+                if (entry.status === 'cutoff') {
+                    gpaText = entry.cutoff.toFixed(1);
+                    if (entry.cutoffYears) gpaTitle = `Median of ${entry.cutoffYears} year(s) with a GPA cut-off`;
+                } else {
+                    gpaText = st.label;
+                    gpaTitle = st.help + (entry.fromYear ? ` (status in ${entry.fromYear}; no GPA cut-off in any year)` : '');
+                }
+                const gpaNote = entry.vacant ? `<div class="text-xs font-normal text-gray-500">ledige pladser</div>` : '';
+                const gpaColor = dimmed ? 'text-gray-500' : cls === 'other' ? 'text-amber-800' : 'text-blue-900';
+
+                const badge = cls === 'below' ? { text: 'Below cut-off', cls: BADGE_OFF, help: 'Your GPA is below the kvote 1 cut-off' }
+                    : entry.status === 'cutoff' ? { text: 'Available', cls: BADGE_OK, help: 'Your GPA meets the kvote 1 cut-off' }
+                    : { text: st.badge, cls: st.cls, help: st.help };
 
                 const tr = document.createElement('tr');
-                tr.className = `border-b border-gray-100 transition-colors ${isDisabled ? 'disabled-row' : 'hover:bg-blue-50/50'}`;
+                tr.className = `border-b border-gray-100 transition-colors ${dimmed ? 'disabled-row' : 'hover:bg-blue-50/50'}`;
                 tr.innerHTML = `
-                    <td class="py-3 px-4 font-mono text-xs text-gray-500">${p.optOmrNr}</td>
-                    <td class="py-3 px-4 font-medium text-gray-900">${p.programDetails}</td>
-                    <td class="py-3 px-4 text-gray-600">${p.institution}</td>
-                    <td class="py-3 px-4 font-bold ${isDisabled ? 'text-gray-500' : isTest ? 'text-amber-800' : 'text-blue-900'}">${gpaDisplay}</td>
-                    <td class="py-3 px-4 text-xs font-semibold">${statusBadge}</td>
+                    <td class="py-3 px-4 font-mono text-xs text-gray-500">${esc(p.optOmrNr)}</td>
+                    <td class="py-3 px-4 font-medium text-gray-900">${esc(p.programDetails)}</td>
+                    <td class="py-3 px-4 text-gray-600">${esc(p.institution)}</td>
+                    <td class="py-3 px-4 font-bold ${gpaColor}" title="${esc(gpaTitle)}">${esc(gpaText)}${gpaNote}</td>
+                    <td class="py-3 px-4 text-xs font-semibold"><span class="${badge.cls} px-2 py-0.5 rounded" title="${esc(badge.help)}">${badge.text}</span></td>
                     <td class="py-3 px-4 text-xs space-x-2">
                         <a href="https://www.ug.dk" target="_blank" rel="noopener" class="text-blue-600 hover:underline">UG.dk ↗</a>
                         <a href="https://ufm.dk/uddannelse/statistik-og-analyser/sogning-og-optag-pa-videregaende-uddannelser/kot-hovedtal" target="_blank" rel="noopener" class="text-gray-500 hover:text-blue-600 hover:underline">KOT ↗</a>
@@ -334,8 +381,11 @@
             const eligibleEl = document.getElementById('eligibleCount');
             if (!isNaN(userGpa)) {
                 eligibleEl.classList.remove('hidden');
-                eligibleEl.innerText = `Eligible for ${eligibleCount} of ${filteredData.length} programs`
-                    + (testCount > 0 ? ` (${testCount} admit by entrance test)` : '');
+                const notes = [];
+                if (counts.other) notes.push(`${counts.other} not decided by GPA (quota 2 / outside quotas)`);
+                if (counts.unavailable) notes.push(`${counts.unavailable} not offered`);
+                eligibleEl.innerText = `Eligible for ${counts.eligible} of ${filteredData.length} programs`
+                    + (notes.length ? ` · ${notes.join(' · ')}` : '');
             } else {
                 eligibleEl.classList.add('hidden');
             }
@@ -371,8 +421,20 @@
             const dir = sortAsc ? 1 : -1;
             filteredData.sort((a, b) => {
                 let cmp;
-                if (sortCol === 'gpa') cmp = requiredGpa(a, yearVal) - requiredGpa(b, yearVal);
-                else cmp = collator.compare(a[sortCol], b[sortCol]);
+                if (sortCol === 'gpa') {
+                    const ea = entryFor(a, yearVal), eb = entryFor(b, yearVal);
+                    const ka = gpaSortKey(ea), kb = gpaSortKey(eb);
+                    // Entries without a GPA bar (quota 2, not offered, ...) always go last, in either direction.
+                    if (ka === null || kb === null) {
+                        if (ka !== null) return -1;
+                        if (kb !== null) return 1;
+                        cmp = NON_CUTOFF_SORT.indexOf(ea.status) - NON_CUTOFF_SORT.indexOf(eb.status);
+                        return cmp || collator.compare(a.optOmrNr, b.optOmrNr);
+                    }
+                    cmp = ka - kb;
+                } else {
+                    cmp = collator.compare(a[sortCol], b[sortCol]);
+                }
                 // Tie-break on KOT ID so equal values keep a stable, predictable order.
                 return dir * cmp || collator.compare(a.optOmrNr, b.optOmrNr);
             });
