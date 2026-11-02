@@ -1,4 +1,4 @@
-{
+window.KOT_DATA = {
   "title": "Complete Danish Higher Education Admission Dataset (KOT 2022-2026)",
   "source": "Coordinated Enrolment System (Den Koordinerede Tilmelding - KOT), Ministry of Higher Education and Science, Denmark",
   "totalPrograms": 1059,
@@ -19066,4 +19066,4 @@
       "medianGpa": 0.0
     }
   ]
-}
+};

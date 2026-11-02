@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Denmark University Admission Explorer - Complete KOT Database (1,059 Programs)</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS (prebuilt; regenerate with: npx tailwindcss@3 --content ./index.html -o tailwind.css --minify) -->
+    <link rel="stylesheet" href="tailwind.css">
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <!-- Leaflet JS -->
@@ -152,7 +152,8 @@
         </div>
     </main>
 
-    <!-- Complete 1,059 Programs Dataset -->
+    <!-- Dataset: data.js sets window.KOT_DATA. Loaded as a script (not fetched) so the page also works when opened from disk (file://). -->
+    <script src="data.js"></script>
     <script>
         let kotData = [];
 
@@ -178,23 +179,14 @@
             document.getElementById('nextBtn').disabled = true;
         }
 
-        async function loadData() {
-            try {
-                const response = await fetch('data.json');
-                if (!response.ok) throw new Error(`HTTP ${response.status} ${response.statusText}`);
-                const data = await response.json();
-                if (!Array.isArray(data.programs) || data.programs.length === 0) {
-                    throw new Error('data.json contains no programs');
-                }
-                kotData = data.programs;
-            } catch (e) {
-                console.error('Failed to load data.json', e);
-                const hint = location.protocol === 'file:'
-                    ? ' Browsers block loading data from local files: serve this folder over HTTP (e.g. "python3 -m http.server 8000") and open http://localhost:8000/.'
-                    : '';
-                showLoadError(`Failed to load data.json (${e.message}).${hint}`);
+        function loadData() {
+            const data = window.KOT_DATA;
+            if (!data || !Array.isArray(data.programs) || data.programs.length === 0) {
+                console.error('window.KOT_DATA missing or empty; is data.js next to index.html?');
+                showLoadError('Failed to load program data: data.js is missing, failed to load, or contains no programs.');
                 return;
             }
+            kotData = data.programs;
 
             // Compute median over years with a real GPA cut-off. If a program never had one,
             // fall back to "admission test" if any year was by test, else "Alle optaget".

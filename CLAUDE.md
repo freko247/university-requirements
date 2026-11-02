@@ -6,20 +6,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A single-page, no-build static web app: a Danish higher-education admission explorer that shows KOT (Den Koordinerede Tilmelding) cut-off GPAs for 2022–2026 and checks which programs a given GPA qualifies for.
 
-- `index.html`: the whole app (markup, inline JS, inline CSS). Tailwind (Play CDN) and Leaflet 1.9.4 load from CDNs, so the page needs internet access to render properly.
-- `data.json`: the dataset (~600 KB). Shape: `{ title, source, totalPrograms, programs: [...] }`, 1,059 programs.
+- `index.html`: the whole app (markup, inline JS, a little inline CSS). Leaflet 1.9.4 still loads from the unpkg CDN, and map tiles come from Esri, so the map needs internet access.
+- `data.js`: the dataset (~600 KB), a JSON object assigned to `window.KOT_DATA`. Shape: `{ title, source, totalPrograms, programs: [...] }`, 1,059 programs. It is a script rather than `data.json` so the page works when opened directly from disk: browsers block `fetch()` on `file://`, but allow `<script src>`. If you regenerate the data as JSON, wrap it as `window.KOT_DATA = <json>;`.
+- `tailwind.css`: prebuilt, minified Tailwind **v3** stylesheet, committed. It contains only the classes used in `index.html`.
 
-There is no package manager, build step, linter or test suite.
+There is no package manager, linter or test suite.
 
 ## Running
 
-`fetch()` doesn't work over `file://`, so serve the directory over HTTP:
+Open `index.html` in a browser, or serve the folder (`python3 -m http.server 8000`). If `data.js` is missing or empty, the table shows an error instead of falling back to any built-in data.
+
+## Rebuilding the CSS
+
+After adding or changing Tailwind classes in `index.html` (including those in JS template strings), regenerate the stylesheet, or the new classes won't be styled:
 
 ```sh
-python3 -m http.server 8000   # then open http://localhost:8000/
+npx tailwindcss@3 --content ./index.html -o tailwind.css --minify
 ```
 
-`loadData()` fetches `data.json`. If that fails, the page shows an error in the table (with a hint when opened via `file://`) instead of falling back to any built-in data.
+Stay on v3: the page was designed against the v3 Play CDN, and v4 changes defaults such as border colour and ring width. Class names must appear as complete literals in `index.html`. Classes built by string concatenation won't be picked up.
 
 ## Data model (`programs[]` entries)
 
