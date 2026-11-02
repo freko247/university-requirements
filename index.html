@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Denmark University Admission Explorer - Complete KOT Database (1,059 Programs)</title>
+    <title>Denmark University Admission Explorer</title><!-- program count appended from the data on load -->
     <!-- Tailwind CSS (prebuilt; regenerate with: npx tailwindcss@3 --content ./index.html -o tailwind.css --minify) -->
     <link rel="stylesheet" href="tailwind.css">
     <!-- Leaflet CSS -->
@@ -24,7 +24,7 @@
     <header class="bg-blue-900 text-white shadow-md">
         <div class="max-w-7xl mx-auto px-4 py-6">
             <h1 class="text-3xl font-bold">Denmark Higher Education Complete KOT Directory</h1>
-            <p class="text-blue-200 mt-1">All 1,059 Official Programs from 2022–2026 Ministry Spreadsheets • Personal Eligibility Checker</p>
+            <p class="text-blue-200 mt-1">All <span data-fill="count">…</span> Official Programs from <span data-fill="years">…</span> Ministry Spreadsheets • Personal Eligibility Checker</p>
         </div>
     </header>
 
@@ -34,8 +34,8 @@
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div class="lg:col-span-2 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                 <div class="flex justify-between items-center mb-3">
-                    <h2 class="text-lg font-semibold text-gray-800">University Campus Locations</h2>
-                    <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">Click markers to filter table</span>
+                    <h2 class="text-lg font-semibold text-gray-800">Study Locations</h2>
+                    <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">Circle size = matching programs · click to filter</span>
                 </div>
                 <div id="map" class="rounded-lg overflow-hidden border border-gray-100"></div>
             </div>
@@ -46,7 +46,7 @@
                     <ul class="space-y-3 text-sm text-gray-600">
                         <li class="flex items-start">
                             <span class="bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded text-xs mr-2 mt-0.5">Total</span>
-                            <span>Contains all <strong>1,059</strong> official higher education programs extracted from your 2022–2026 KOT data files.</span>
+                            <span>Contains all <strong data-fill="count">…</strong> official higher education programs from the <span data-fill="years">…</span> KOT admission figures.</span>
                         </li>
                         <li class="flex items-start">
                             <span class="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-xs mr-2 mt-0.5">Filter</span>
@@ -64,7 +64,7 @@
 
         <!-- Filter Controls -->
         <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-6">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                 <div>
                     <label for="searchInput" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Search Programs or ID</label>
                     <input type="text" id="searchInput" placeholder="Search name or ID..."
@@ -75,19 +75,22 @@
                     <label for="institutionFilter" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Institution</label>
                     <select id="institutionFilter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white">
                         <option value="">All Institutions</option>
-                        <!-- Remaining options are built from the data in populateInstitutionFilter() -->
+                        <!-- Remaining options are built from the data in populateFilters() -->
+                    </select>
+                </div>
+
+                <div>
+                    <label for="locationFilter" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Location</label>
+                    <select id="locationFilter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white">
+                        <option value="">All Locations</option>
+                        <!-- Remaining options are built from the data in populateFilters() -->
                     </select>
                 </div>
 
                 <div>
                     <label for="yearFilter" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Admission Year / Metric</label>
                     <select id="yearFilter" class="w-full px-3 py-2 border border-blue-600 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm font-semibold bg-blue-50 text-blue-900">
-                        <option value="median">5-Year Median (2022-2026)</option>
-                        <option value="2026">2026 Cut-off</option>
-                        <option value="2025">2025 Cut-off</option>
-                        <option value="2024">2024 Cut-off</option>
-                        <option value="2023">2023 Cut-off</option>
-                        <option value="2022">2022 Cut-off</option>
+                        <!-- Built from data.years in populateFilters() -->
                     </select>
                 </div>
 
@@ -118,10 +121,10 @@
                 <table class="w-full text-left border-collapse" id="programsTable">
                     <thead>
                         <tr class="bg-gray-100 text-gray-700 text-xs uppercase tracking-wider border-b border-gray-200">
-                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="optOmrNr">KOT ID <span class="sort-ind">↕</span></th>
-                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="programDetails">Program Details <span class="sort-ind">↕</span></th>
-                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="institution">Institution <span class="sort-ind">↕</span></th>
-                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="gpa">Required GPA <span class="sort-ind">↕</span></th>
+                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="optOmrNr">KOT ID <span class="sort-ind">↕︎</span></th>
+                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="programDetails">Program Details <span class="sort-ind">↕︎</span></th>
+                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="institution">Institution <span class="sort-ind">↕︎</span></th>
+                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="gpa">Required GPA <span class="sort-ind">↕︎</span></th>
                             <th class="py-3 px-4">Status</th>
                             <th class="py-3 px-4">Official Links</th>
                         </tr>
@@ -225,22 +228,57 @@
                 }
             });
 
-            populateInstitutionFilter();
+            fillDatasetInfo(data);
+            populateFilters(data);
+            buildMapMarkers();
             applyFilters();
         }
 
         // Danish collation so æ, ø, å sort after z; numeric so IDs compare as numbers.
         const collator = new Intl.Collator('da', { numeric: true, sensitivity: 'base' });
 
-        function populateInstitutionFilter() {
-            const counts = new Map();
-            kotData.forEach(p => counts.set(p.institution, (counts.get(p.institution) || 0) + 1));
-            const select = document.getElementById('institutionFilter');
+        const ONLINE_LOCATION = 'E-læring';  // programs without a physical location (no map marker)
+
+        function fillDatasetInfo(data) {
+            const years = data.years;
+            const count = kotData.length.toLocaleString('en-US');
+            const range = years.length > 1 ? `${years[0]}–${years[years.length - 1]}` : years[0];
+            document.querySelectorAll('[data-fill="count"]').forEach(el => el.textContent = count);
+            document.querySelectorAll('[data-fill="years"]').forEach(el => el.textContent = range);
+            document.title = `Denmark University Admission Explorer – KOT ${range} (${count} programs)`;
+        }
+
+        function addOptions(select, counts, labelFor = name => name) {
             [...counts.keys()].sort(collator.compare).forEach(name => {
                 const opt = document.createElement('option');
                 opt.value = name;
-                opt.textContent = `${name} (${counts.get(name)})`;
+                opt.textContent = `${labelFor(name)} (${counts.get(name)})`;
                 select.appendChild(opt);
+            });
+        }
+
+        function countBy(key) {
+            const counts = new Map();
+            kotData.forEach(p => counts.set(p[key], (counts.get(p[key]) || 0) + 1));
+            return counts;
+        }
+
+        function populateFilters(data) {
+            addOptions(document.getElementById('institutionFilter'), countBy('institution'));
+            addOptions(document.getElementById('locationFilter'), countBy('location'),
+                name => name === ONLINE_LOCATION ? `${name} (online)` : name);
+
+            const yearSelect = document.getElementById('yearFilter');
+            const years = data.years;
+            const median = document.createElement('option');
+            median.value = 'median';
+            median.textContent = `Median ${years[0]}–${years[years.length - 1]}`;
+            yearSelect.appendChild(median);
+            [...years].reverse().forEach(y => {
+                const opt = document.createElement('option');
+                opt.value = y;
+                opt.textContent = `${y} Cut-off`;
+                yearSelect.appendChild(opt);
             });
         }
 
@@ -268,52 +306,99 @@
         let pageSize = 30;
         let filteredData = [];
 
-        // Initialize Map
-        const map = L.map('map').setView([56.2639, 9.5018], 7);
+        // Map: one circle per program location (lat/lng from data.js). Circles reflect the search and
+        // institution filters (not the location filter, so another location can still be picked).
+        // Home view: fit all markers in Denmark proper (Greenland, e.g. Sisimiut, would zoom the map far out).
+        const map = L.map('map', { zoomSnap: 0.25 }).setView([56.2639, 9.5018], 7);  // fractional zoom so Denmark fills the panel
+        let homeBounds = null;
+        const showHome = () => homeBounds ? map.fitBounds(homeBounds, { padding: [15, 15] }) : map.setView([56.2639, 9.5018], 7);
         L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
             attribution: 'Tiles &copy; Esri'
         }).addTo(map);
 
-        const mapHubs = [
-            { name: "Københavns Universitet", lat: 55.6761, lng: 12.5683 },
-            { name: "Aarhus Universitet", lat: 56.1672, lng: 10.2039 },
-            { name: "Syddansk Universitet", lat: 55.3680, lng: 10.4320 },
-            { name: "Aalborg Universitet", lat: 57.0143, lng: 9.9912 },
-            { name: "Danmarks Tekniske Universitet", lat: 55.7851, lng: 12.5235 },
-            { name: "Copenhagen Business School - Handelshøjskolen", lat: 55.6819, lng: 12.5298 }
-        ];
+        const MARKER_STYLE = { color: '#1e3a8a', fillColor: '#3b82f6', fillOpacity: 0.55, weight: 1 };
+        const MARKER_SELECTED = { color: '#7f1d1d', fillColor: '#ef4444', fillOpacity: 0.75, weight: 2 };
+        const markers = new Map();  // location -> { marker, programs: [] (current matches) }
 
-        // `name` must equal an `institution` value in the data exactly (filtering is exact-match).
-        mapHubs.forEach(h => {
-            L.marker([h.lat, h.lng]).addTo(map).bindPopup(`
-                <b>${h.name}</b><br>
-                <button onclick="filterByInst('${h.name}')" class="mt-2 text-xs bg-blue-600 text-white px-2 py-1 rounded">Filter Table</button>
-            `);
-        });
+        function buildMapMarkers() {
+            kotData.forEach(p => {
+                if (p.lat == null || markers.has(p.location)) return;
+                const marker = L.circleMarker([p.lat, p.lng], MARKER_STYLE)
+                    .bindTooltip(p.location)
+                    .bindPopup(() => markerPopup(p.location));
+                markers.set(p.location, { marker, programs: [] });
+            });
+            const dk = [...markers.values()].map(m => m.marker.getLatLng()).filter(ll => ll.lng > 7 && ll.lng < 16 && ll.lat > 54 && ll.lat < 58);
+            if (dk.length) homeBounds = L.latLngBounds(dk);
+            showHome();
+        }
 
-        window.filterByInst = function(name) {
-            const select = document.getElementById('institutionFilter');
-            if (![...select.options].some(o => o.value === name)) {
-                console.warn(`Map marker "${name}" matches no institution in the data`);
-                return;
+        function markerPopup(location) {
+            const { programs } = markers.get(location);
+            const byInst = new Map();
+            programs.forEach(p => byInst.set(p.institution, (byInst.get(p.institution) || 0) + 1));
+            const top = [...byInst.entries()].sort((a, b) => b[1] - a[1] || collator.compare(a[0], b[0]));
+
+            const el = document.createElement('div');
+            const title = document.createElement('b');
+            title.textContent = location;
+            const summary = document.createElement('div');
+            summary.textContent = `${programs.length} matching program${programs.length === 1 ? '' : 's'}`;
+            const list = document.createElement('ul');
+            top.slice(0, 5).forEach(([name, n]) => {
+                const li = document.createElement('li');
+                li.textContent = `${name} (${n})`;
+                list.appendChild(li);
+            });
+            if (top.length > 5) {
+                const li = document.createElement('li');
+                li.textContent = `+ ${top.length - 5} more`;
+                list.appendChild(li);
             }
-            select.value = name;
+            const selected = document.getElementById('locationFilter').value === location;
+            const btn = document.createElement('button');
+            btn.className = 'mt-2 text-xs bg-blue-600 text-white px-2 py-1 rounded';
+            btn.textContent = selected ? 'Show all locations' : 'Show programs here';
+            btn.addEventListener('click', () => selectLocation(selected ? '' : location));
+            el.append(title, summary, list, btn);
+            return el;
+        }
+
+        function selectLocation(location) {
+            document.getElementById('locationFilter').value = location;
             currentPage = 1;
             applyFilters();
             map.closePopup();
-        };
+        }
+
+        function updateMap(programs, selectedLocation) {
+            markers.forEach(m => m.programs = []);
+            programs.forEach(p => markers.get(p.location)?.programs.push(p));
+            markers.forEach((m, location) => {
+                const n = m.programs.length;
+                if (n === 0) { m.marker.remove(); return; }
+                m.marker.setRadius(Math.min(5 + 2 * Math.sqrt(n), 22));
+                m.marker.setStyle(location === selectedLocation ? MARKER_SELECTED : MARKER_STYLE);
+                m.marker.setTooltipContent(`${location}: ${n} program${n === 1 ? '' : 's'}`);
+                if (!map.hasLayer(m.marker)) m.marker.addTo(map);
+                if (location === selectedLocation) m.marker.bringToFront();
+            });
+        }
 
         function applyFilters() {
             const search = document.getElementById('searchInput').value.toLowerCase();
             const inst = document.getElementById('institutionFilter').value;
+            const location = document.getElementById('locationFilter').value;
 
-            filteredData = kotData.filter(p => {
+            const matching = kotData.filter(p => {
                 const matchesSearch = p.programDetails.toLowerCase().includes(search) || p.institution.toLowerCase().includes(search) || p.optOmrNr.includes(search);
                 const matchesInst = inst === "" || p.institution === inst;
                 return matchesSearch && matchesInst;
             });
+            updateMap(matching, location);
+            filteredData = location === "" ? matching : matching.filter(p => p.location === location);
 
-            document.getElementById('resetFilterBtn').classList.toggle('hidden', search === "" && inst === "");
+            document.getElementById('resetFilterBtn').classList.toggle('hidden', search === "" && inst === "" && location === "");
             applySort();
 
             renderPage();
@@ -394,6 +479,12 @@
         // Listeners
         document.getElementById('searchInput').addEventListener('input', () => { currentPage = 1; applyFilters(); });
         document.getElementById('institutionFilter').addEventListener('change', () => { currentPage = 1; applyFilters(); });
+        document.getElementById('locationFilter').addEventListener('change', () => {
+            currentPage = 1;
+            applyFilters();
+            const m = markers.get(document.getElementById('locationFilter').value);
+            if (m) map.panInside(m.marker.getLatLng(), { padding: [40, 40] });
+        });
         // Re-sort on year change: the GPA column's values depend on the selected year.
         document.getElementById('yearFilter').addEventListener('change', () => { applySort(); renderPage(); });
         document.getElementById('userGpaInput').addEventListener('input', renderPage);
@@ -404,10 +495,12 @@
 
         document.getElementById('resetFilterBtn').addEventListener('click', () => {
             document.getElementById('institutionFilter').value = "";
+            document.getElementById('locationFilter').value = "";
             document.getElementById('searchInput').value = "";
             currentPage = 1;
             applyFilters();
-            map.setView([56.2639, 9.5018], 7);
+            map.closePopup();
+            showHome();
         });
 
         // Sorting. sortCol === null keeps the data file's order. Clicking a new column sorts it
@@ -443,7 +536,7 @@
         function updateSortIndicators() {
             document.querySelectorAll('th[data-sort]').forEach(th => {
                 const active = th.dataset.sort === sortCol;
-                th.querySelector('.sort-ind').textContent = active ? (sortAsc ? '↑' : '↓') : '↕';
+                th.querySelector('.sort-ind').textContent = active ? (sortAsc ? '↑' : '↓') : '↕\uFE0E';
                 th.setAttribute('aria-sort', active ? (sortAsc ? 'ascending' : 'descending') : 'none');
             });
         }

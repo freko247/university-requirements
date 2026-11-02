@@ -24,7 +24,7 @@ uv run scripts/build_data.py   # dependencies (openpyxl) are declared inline (PE
 
 - The script takes each file's year from the first `20xx` in its filename and reads the `hovedtal med filter` sheet. Column positions are fixed in `COL_*`.
 - It aborts on any kvote 1 text it doesn't recognise, or on a location missing from `LOCATIONS`. Add new wording to `STATUS_TEXT` (and a matching entry in `STATUS` in `index.html`), and new places to `LOCATIONS`.
-- When adding a year, also add it to the year `<select>` in `index.html`, which is still hardcoded.
+- Nothing in `index.html` needs changing for a new year: the year dropdown, header text and counts are all built from `data.years` and `programs`.
 
 ## Running
 
@@ -71,8 +71,9 @@ On load, `index.html` computes `p.median`. This is the median of the years with 
 ## How the inline JS fits together
 
 - Global state: `kotData` (all rows), `filteredData` (after search/institution filter, then sorted), `currentPage`, `pageSize`, `sortCol` (`null` = data file order), `sortAsc`.
-- `applyFilters()` rebuilds `filteredData` from the search box and institution dropdown, shows or hides the "Clear Filters" button, calls `applySort()`, then calls `renderPage()`. `renderPage()` reads the year/metric selector and the user's GPA, counts eligible rows across all of `filteredData`, and renders only the current page. GPA changes call `renderPage()` directly. Year changes call `applySort()` first, because GPA-column values depend on the year.
+- `applyFilters()` filters by search and institution, calls `updateMap()` with that set, then applies the location filter to produce `filteredData`. It also shows or hides the "Clear Filters" button, calls `applySort()`, then calls `renderPage()`. `renderPage()` reads the year/metric selector and the user's GPA, counts eligible rows across all of `filteredData`, and renders only the current page. GPA changes call `renderPage()` directly. Year changes call `applySort()` first, because GPA-column values depend on the year.
 - Sorting: header cells carry `data-sort="<column>"`. Clicking a new column sorts it ascending; clicking the active column flips the direction; and the column header shows ↑/↓. Text and IDs compare with the shared `collator` (`Intl.Collator('da', {numeric: true})`), and ties break on KOT ID. Danish collation puts æ/ø/å after z and treats a leading "Aa" as "Å", so Aalborg and Aarhus sort last.
-- The institution dropdown is built from the data by `populateInstitutionFilter()`, which lists every institution with its program count. Matching is exact (`p.institution === value`).
-- The map markers (`mapHubs`, 6 hardcoded coordinates) are still hardcoded and don't use the per-program `lat`/`lng` yet. Each `name` must exactly equal an `institution` value in the data, or "Filter Table" logs a warning and does nothing. Row links are hardcoded to the generic UG.dk and KOT pages, because the spreadsheets have no per-program links.
-- Rows are rendered with `innerHTML` string templates. Data values go through `esc()`. Map popups call the global `window.filterByInst`.
+- On load, `fillDatasetInfo()` fills `[data-fill="count"]`/`[data-fill="years"]` elements and the page title. `populateFilters()` builds the institution, location and year dropdowns from the data. Matching is exact (`p.institution === value`, `p.location === value`).
+- Map: `buildMapMarkers()` creates one `L.circleMarker` per `location` that has coordinates. "E-læring" (online) has none and can only be chosen in the dropdown. `updateMap()` resizes markers by the number of programs matching search and institution, hides empty ones, and highlights the selected location in red. The location filter is deliberately not applied to the markers, so another location can still be clicked. Popups are DOM elements built in `markerPopup()`. Their button calls `selectLocation()`. The home view (`showHome()`) fits the Danish markers and leaves out Greenland (Sisimiut).
+- Row links are hardcoded to the generic UG.dk and KOT pages, because the spreadsheets have no per-program links.
+- Rows are rendered with `innerHTML` string templates. Data values go through `esc()`.
