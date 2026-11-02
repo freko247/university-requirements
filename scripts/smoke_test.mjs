@@ -2,6 +2,7 @@
 // Smoke test: opens index.html from disk in headless Chrome and checks it against data.js.
 //
 //   node scripts/smoke_test.mjs            # exit code 0 = all checks passed
+//   node scripts/smoke_test.mjs https://freko247.github.io/university-requirements/   # check the live site
 //   CHROME=/path/to/chrome node scripts/smoke_test.mjs
 //
 // No npm packages needed: talks to Chrome over the DevTools protocol (Node 22+ for global WebSocket).
@@ -13,7 +14,8 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const pageUrl = pathToFileURL(path.join(root, 'index.html')).href;
+const pageUrl = process.argv[2] || pathToFileURL(path.join(root, 'index.html')).href;
+console.log(`Testing ${pageUrl}`);
 const chromePath = process.env.CHROME || [
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',

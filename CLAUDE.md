@@ -19,6 +19,7 @@ There is no package manager or linter.
 
 ```sh
 node scripts/smoke_test.mjs   # needs Node 22+ and Chrome (set CHROME=... if not in the default location)
+node scripts/smoke_test.mjs https://freko247.github.io/university-requirements/   # same checks against the live site
 ```
 
 The test opens `index.html` from disk in headless Chrome. It checks the page against `data.js`: every program loaded; the year, institution and location dropdowns; one map marker per mapped location; per-year eligibility counts at GPA 7, recomputed independently in the test; row expansion; filters and reset; the phone-width layout; and a clean console. Run it after rebuilding the data or changing `index.html`. The test keeps its own copy of the status→kind mapping, so update it when adding a status.
@@ -38,6 +39,10 @@ uv run scripts/build_data.py   # dependencies (openpyxl) are declared inline (PE
 ## Running
 
 Open `index.html` in a browser, or serve the folder (`python3 -m http.server 8000`). If `data.js` is missing or empty, the table shows an error instead of falling back to any built-in data.
+
+## Hosting
+
+Public repo `freko247/university-requirements`, served by GitHub Pages from the root of `main` at https://freko247.github.io/university-requirements/. Pages redeploys on every push to `main`. `.nojekyll` makes Pages serve the files as they are. The spreadsheets are gitignored and never published. Commits use the GitHub noreply address set in this repo's local git config.
 
 ## Rebuilding the CSS
 
