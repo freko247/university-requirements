@@ -56,7 +56,7 @@
                 </div>
                 <div class="mt-6 pt-4 border-t border-gray-100">
                     <button id="resetFilterBtn" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-lg text-sm transition-colors hidden">
-                        Clear Institution Filter
+                        Clear Filters
                     </button>
                 </div>
             </div>
@@ -75,16 +75,7 @@
                     <label for="institutionFilter" class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Institution</label>
                     <select id="institutionFilter" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm bg-white">
                         <option value="">All Institutions</option>
-                        <option value="Københavns Universitet">Københavns Universitet</option>
-                        <option value="Aarhus Universitet">Aarhus Universitet</option>
-                        <option value="Syddansk Universitet">Syddansk Universitet</option>
-                        <option value="Aalborg Universitet">Aalborg Universitet</option>
-                        <option value="Danmarks Tekniske Universitet">Danmarks Tekniske Universitet</option>
-                        <option value="Copenhagen Business School">Copenhagen Business School</option>
-                        <option value="IT-Universitetet i København">IT-Universitetet i København</option>
-                        <option value="Roskilde Universitet">Roskilde Universitet</option>
-                        <option value="Københavns Professionshøjskole">Københavns Professionshøjskole</option>
-                        <option value="VIA University College">VIA University College</option>
+                        <!-- Remaining options are built from the data in populateInstitutionFilter() -->
                     </select>
                 </div>
 
@@ -127,10 +118,10 @@
                 <table class="w-full text-left border-collapse" id="programsTable">
                     <thead>
                         <tr class="bg-gray-100 text-gray-700 text-xs uppercase tracking-wider border-b border-gray-200">
-                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200" onclick="sortTable('optOmrNr')">KOT ID ↕</th>
-                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200" onclick="sortTable('programDetails')">Program Details ↕</th>
-                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200" onclick="sortTable('institution')">Institution ↕</th>
-                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200" onclick="sortTable('gpa')">Required GPA ↕</th>
+                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="optOmrNr">KOT ID <span class="sort-ind">↕</span></th>
+                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="programDetails">Program Details <span class="sort-ind">↕</span></th>
+                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="institution">Institution <span class="sort-ind">↕</span></th>
+                            <th class="py-3 px-4 cursor-pointer hover:bg-gray-200 select-none" data-sort="gpa">Required GPA <span class="sort-ind">↕</span></th>
                             <th class="py-3 px-4">Status</th>
                             <th class="py-3 px-4">Official Links</th>
                         </tr>
@@ -203,7 +194,23 @@
                 }
             });
 
+            populateInstitutionFilter();
             applyFilters();
+        }
+
+        // Danish collation so æ, ø, å sort after z; numeric so IDs compare as numbers.
+        const collator = new Intl.Collator('da', { numeric: true, sensitivity: 'base' });
+
+        function populateInstitutionFilter() {
+            const counts = new Map();
+            kotData.forEach(p => counts.set(p.institution, (counts.get(p.institution) || 0) + 1));
+            const select = document.getElementById('institutionFilter');
+            [...counts.keys()].sort(collator.compare).forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = `${name} (${counts.get(name)})`;
+                select.appendChild(opt);
+            });
         }
 
         function requiredGpa(p, yearVal) {
@@ -227,9 +234,10 @@
             { name: "Syddansk Universitet", lat: 55.3680, lng: 10.4320 },
             { name: "Aalborg Universitet", lat: 57.0143, lng: 9.9912 },
             { name: "Danmarks Tekniske Universitet", lat: 55.7851, lng: 12.5235 },
-            { name: "Copenhagen Business School", lat: 55.6819, lng: 12.5298 }
+            { name: "Copenhagen Business School - Handelshøjskolen", lat: 55.6819, lng: 12.5298 }
         ];
 
+        // `name` must equal an `institution` value in the data exactly (filtering is exact-match).
         mapHubs.forEach(h => {
             L.marker([h.lat, h.lng]).addTo(map).bindPopup(`
                 <b>${h.name}</b><br>
@@ -238,8 +246,12 @@
         });
 
         window.filterByInst = function(name) {
-            document.getElementById('institutionFilter').value = name;
-            document.getElementById('resetFilterBtn').classList.remove('hidden');
+            const select = document.getElementById('institutionFilter');
+            if (![...select.options].some(o => o.value === name)) {
+                console.warn(`Map marker "${name}" matches no institution in the data`);
+                return;
+            }
+            select.value = name;
             currentPage = 1;
             applyFilters();
             map.closePopup();
@@ -251,9 +263,12 @@
 
             filteredData = kotData.filter(p => {
                 const matchesSearch = p.programDetails.toLowerCase().includes(search) || p.institution.toLowerCase().includes(search) || p.optOmrNr.includes(search);
-                const matchesInst = inst === "" || p.institution.includes(inst);
+                const matchesInst = inst === "" || p.institution === inst;
                 return matchesSearch && matchesInst;
             });
+
+            document.getElementById('resetFilterBtn').classList.toggle('hidden', search === "" && inst === "");
+            applySort();
 
             renderPage();
         }
@@ -329,7 +344,8 @@
         // Listeners
         document.getElementById('searchInput').addEventListener('input', () => { currentPage = 1; applyFilters(); });
         document.getElementById('institutionFilter').addEventListener('change', () => { currentPage = 1; applyFilters(); });
-        document.getElementById('yearFilter').addEventListener('change', renderPage);
+        // Re-sort on year change: the GPA column's values depend on the selected year.
+        document.getElementById('yearFilter').addEventListener('change', () => { applySort(); renderPage(); });
         document.getElementById('userGpaInput').addEventListener('input', renderPage);
         document.getElementById('pageSizeSelect').addEventListener('change', () => { currentPage = 1; renderPage(); });
 
@@ -339,34 +355,48 @@
         document.getElementById('resetFilterBtn').addEventListener('click', () => {
             document.getElementById('institutionFilter').value = "";
             document.getElementById('searchInput').value = "";
-            document.getElementById('resetFilterBtn').classList.add('hidden');
             currentPage = 1;
             applyFilters();
             map.setView([56.2639, 9.5018], 7);
         });
 
-        // Sorting
-        let sortDir = false;
-        window.sortTable = function(col) {
-            sortDir = !sortDir;
+        // Sorting. sortCol === null keeps the data file's order. Clicking a new column sorts it
+        // ascending; clicking the active column flips direction. The sort survives re-filtering.
+        let sortCol = null;
+        let sortAsc = true;
+
+        function applySort() {
+            if (sortCol === null) return;
             const yearVal = document.getElementById('yearFilter').value;
-
+            const dir = sortAsc ? 1 : -1;
             filteredData.sort((a, b) => {
-                let vA, vB;
-                if (col === 'optOmrNr') { vA = a.optOmrNr; vB = b.optOmrNr; }
-                else if (col === 'programDetails') { vA = a.programDetails; vB = b.programDetails; }
-                else if (col === 'institution') { vA = a.institution; vB = b.institution; }
-                else if (col === 'gpa') {
-                    vA = requiredGpa(a, yearVal);
-                    vB = requiredGpa(b, yearVal);
-                }
-
-                if (vA < vB) return sortDir ? -1 : 1;
-                if (vA > vB) return sortDir ? 1 : -1;
-                return 0;
+                let cmp;
+                if (sortCol === 'gpa') cmp = requiredGpa(a, yearVal) - requiredGpa(b, yearVal);
+                else cmp = collator.compare(a[sortCol], b[sortCol]);
+                // Tie-break on KOT ID so equal values keep a stable, predictable order.
+                return dir * cmp || collator.compare(a.optOmrNr, b.optOmrNr);
             });
-            renderPage();
-        };
+        }
+
+        function updateSortIndicators() {
+            document.querySelectorAll('th[data-sort]').forEach(th => {
+                const active = th.dataset.sort === sortCol;
+                th.querySelector('.sort-ind').textContent = active ? (sortAsc ? '↑' : '↓') : '↕';
+                th.setAttribute('aria-sort', active ? (sortAsc ? 'ascending' : 'descending') : 'none');
+            });
+        }
+
+        document.querySelectorAll('th[data-sort]').forEach(th => {
+            th.addEventListener('click', () => {
+                const col = th.dataset.sort;
+                sortAsc = col === sortCol ? !sortAsc : true;
+                sortCol = col;
+                applySort();
+                updateSortIndicators();
+                currentPage = 1;
+                renderPage();
+            });
+        });
 
         // Load dataset on start
         loadData();
